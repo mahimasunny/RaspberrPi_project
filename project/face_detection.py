@@ -1,37 +1,37 @@
-'
-import numpy as np
+import io
+import picamera
 import cv2
+import numpy
 
-faceCascade = cv2.CascadeClassifier('Cascades/haarcascade_frontalface_default.xml')
+#Create a memory stream so photos doesn't need to be saved in a file
+stream = io.BytesIO()
 
-cap = cv2.VideoCapture(0)
-cap.set(3,640) # set Width
-cap.set(4,480) # set Height
+#Get the picture (low resolution, so it should be quite fast)
+#Here you can also specify other parameters (e.g.:rotate the image)
+with picamera.PiCamera() as camera:
+    camera.resolution = (320, 240)
+    camera.capture(stream, format='jpeg')
 
-while True:
-    ret, img = cap.read()
-    img = cv2.flip(img, -1)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = faceCascade.detectMultiScale(
-        gray,
-        
-        scaleFactor=1.2,
-        minNeighbors=5
-        ,     
-        minSize=(20, 20)
-    )
+#Convert the picture into a numpy array
+buff = numpy.fromstring(stream.getvalue(), dtype=numpy.uint8)
 
-    for (x,y,w,h) in faces:
-        cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
-        roi_gray = gray[y:y+h, x:x+w]
-        roi_color = img[y:y+h, x:x+w]
-        
+#Now creates an OpenCV image
+image = cv2.imdecode(buff, 1)
 
-    cv2.imshow('video',img)
+#Load a cascade file for detecting faces
+face_cascade = cv2.CascadeClassifier('./haarcascade_frontalface_alt.xml')
 
-    k = cv2.waitKey(30) & 0xff
-    if k == 27: # press 'ESC' to quit
-        break
+#Convert to grayscale
+gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
 
-cap.release()
-cv2.destroyAllWindows()
+#Look for faces in the image using the loaded cascade file
+faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+
+print("Found "+str(len(faces))+" face(s)")
+
+#Draw a rectangle around every found face
+for (x,y,w,h) in faces:
+    cv2.rectangle(image,(x,y),(x+w,y+h),(255,255,0),2)
+
+#Save the result image
+cv2.imwrite('./output/result.jpg',image)

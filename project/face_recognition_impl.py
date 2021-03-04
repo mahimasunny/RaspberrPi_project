@@ -1,129 +1,119 @@
-import face_recognition
-import cv2
+# -*- coding: utf-8 -*-
+from __future__ import print_function
+import click
+import os
+import re
+import face_recognition.api as face_recognition
+import multiprocessing
+import itertools
+import sys
+import PIL.Image
 import numpy as np
 
-# This is a demo of running face recognition on live video from your webcam. It's a little more complicated than the
-# other example, but it includes some basic performance tweaks to make things run a lot faster:
-#   1. Process each video frame at 1/4 resolution (though still display it at full resolution)
-#   2. Only detect faces in every other frame of video.
 
-# PLEASE NOTE: This example requires OpenCV (the `cv2` library) to be installed only to read from your webcam.
-# OpenCV is *not* required to use the face_recognition library. It's only required if you want to run this
-# specific demo. If you have trouble installing it, try any of the other demos that don't require it instead.
+def scan_known_people(known_people_folder):
+    known_names = []
+    known_face_encodings = []
 
-# Get a reference to webcam #0 (the default one)
-video_capture = cv2.VideoCapture(0)
+    for file in image_files_in_folder(known_people_folder):
+        basename = os.path.splitext(os.path.basename(file))[0]
+        img = face_recognition.load_image_file(file)
+        encodings = face_recognition.face_encodings(img)
 
-# Load a sample picture and learn how to recognize it.
-kamala_image = face_recognition.load_image_file("./dataset/Kamala1.jpg")
-kamala_face_encoding = face_recognition.face_encodings(kamala_image)[0]
+        if len(encodings) > 1:
+            click.echo("WARNING: More than one face found in {}. Only considering the first face.".format(file))
 
-# Load a second sample picture and learn how to recognize it.
-# mahima_image = face_recognition.load_image_file("./dataset/mahi2.2.jpg")
-# print(len(mahima_image), mahima_image.shape)
-# mahima_face_encoding = face_recognition.face_encodings(mahima_image)[0]
-img = face_recognition.load_image_file("./dataset/mahi1.jpg")
+        if len(encodings) == 0:
+            click.echo("WARNING: No faces found in {}. Ignoring file.".format(file))
+        else:
+            known_names.append(basename)
+            known_face_encodings.append(encodings[0])
 
-# Assume the whole image is the location of the face
-height, width, _ = img.shape
-# location is in css order - top, right, bottom, left
-face_location = (0, width, height, 0)
-
-mahima_face_encoding = face_recognition.face_encodings(img, known_face_locations=[face_location])
-
-# Create arrays of known face encodings and their names
-known_face_encodings = [
-    kamala_face_encoding,
-    mahima_face_encoding
-]
-known_face_names = [
-    "Kamala Harris",
-    "Mahima Sunny"
-]
-
-# Initialize some variables
-face_locations = []
-face_encodings = []
-face_names = []
-process_this_frame = True
-
-while True:
-    # Grab a single frame of video
-    ret, frame = video_capture.read()
-
-    # Resize frame of video to 1/4 size for faster face recognition processing
-    small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-
-    # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
-    rgb_small_frame = small_frame[:, :, ::-1]
-
-    # Only process every other frame of video to save time
-    if process_this_frame:
-        # Find all the faces and face encodings in the current frame of video
-        face_locations = face_recognition.face_locations(rgb_small_frame)
-        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
-
-        face_names = []
-        print(len(known_face_encodings[0]), len(face_encodings[0]))
-        # for face_encoding in face_encodings:
-        #     # See if the face is a match for the known face(s)
-        #     matches = face_recognition.compare_faces(known_face_encodings[0], face_encoding)
-        #     name = "Unknown"
-
-        #     # # If a match was found in known_face_encodings, just use the first one.
-        #     # if True in matches:
-        #     #     first_match_index = matches.index(True)
-        #     #     name = known_face_names[first_match_index]
-
-        #     # Or instead, use the known face with the smallest distance to the new face
-        #     face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
-        #     best_match_index = np.argmin(face_distances)
-        #     if matches[best_match_index]:
-        #         name = known_face_names[best_match_index]
-
-        #     face_names.append(name)
-        matches = face_recognition.compare_faces(known_face_encodings[0], face_encodings[0])
-        name = "Unknown"
-
-        # # If a match was found in known_face_encodings, just use the first one.
-        # if True in matches:
-        #     first_match_index = matches.index(True)
-        #     name = known_face_names[first_match_index]
-
-        # Or instead, use the known face with the smallest distance to the new face
-        face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
-        best_match_index = np.argmin(face_distances)
-        if matches[best_match_index]:
-            name = known_face_names[best_match_index]
-
-        face_names.append(name)
-
-    process_this_frame = not process_this_frame
+    return known_names, known_face_encodings
 
 
-    # Display the results
-    for (top, right, bottom, left), name in zip(face_locations, face_names):
-        # Scale back up face locations since the frame we detected in was scaled to 1/4 size
-        top *= 4
-        right *= 4
-        bottom *= 4
-        left *= 4
+def print_result(filename, name, distance, show_distance=False):
+    if show_distance:
+        print("{},{},{}".format(filename, name, distance))
+    else:
+        print("{},{}".format(filename, name))
 
-        # Draw a box around the face
-        cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
 
-        # Draw a label with a name below the face
-        cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
-        font = cv2.FONT_HERSHEY_DUPLEX
-        cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+def test_image(image_to_check, known_names, known_face_encodings, tolerance=0.6, show_distance=False):
+    unknown_image = face_recognition.load_image_file(image_to_check)
 
-    # Display the resulting image
-    cv2.imshow('Video', frame)
+    # Scale down image if it's giant so things run a little faster
+    if max(unknown_image.shape) > 1600:
+        pil_img = PIL.Image.fromarray(unknown_image)
+        pil_img.thumbnail((1600, 1600), PIL.Image.LANCZOS)
+        unknown_image = np.array(pil_img)
 
-    # Hit 'q' on the keyboard to quit!
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    unknown_encodings = face_recognition.face_encodings(unknown_image)
 
-# Release handle to the webcam
-video_capture.release()
-cv2.destroyAllWindows()
+    for unknown_encoding in unknown_encodings:
+        distances = face_recognition.face_distance(known_face_encodings, unknown_encoding)
+        result = list(distances <= tolerance)
+
+        if True in result:
+            [print_result(image_to_check, name, distance, show_distance) for is_match, name, distance in zip(result, known_names, distances) if is_match]
+        else:
+            print_result(image_to_check, "unknown_person", None, show_distance)
+
+    if not unknown_encodings:
+        # print out fact that no faces were found in image
+        print_result(image_to_check, "no_persons_found", None, show_distance)
+
+
+def image_files_in_folder(folder):
+    return [os.path.join(folder, f) for f in os.listdir(folder) if re.match(r'.*\.(jpg|jpeg|png)', f, flags=re.I)]
+
+
+def process_images_in_process_pool(images_to_check, known_names, known_face_encodings, number_of_cpus, tolerance, show_distance):
+    if number_of_cpus == -1:
+        processes = None
+    else:
+        processes = number_of_cpus
+
+    # macOS will crash due to a bug in libdispatch if you don't use 'forkserver'
+    context = multiprocessing
+    if "forkserver" in multiprocessing.get_all_start_methods():
+        context = multiprocessing.get_context("forkserver")
+
+    pool = context.Pool(processes=processes)
+
+    function_parameters = zip(
+        images_to_check,
+        itertools.repeat(known_names),
+        itertools.repeat(known_face_encodings),
+        itertools.repeat(tolerance),
+        itertools.repeat(show_distance)
+    )
+
+    pool.starmap(test_image, function_parameters)
+
+
+@click.command()
+@click.argument('known_people_folder')
+@click.argument('image_to_check')
+@click.option('--cpus', default=1, help='number of CPU cores to use in parallel (can speed up processing lots of images). -1 means "use all in system"')
+@click.option('--tolerance', default=0.6, help='Tolerance for face comparisons. Default is 0.6. Lower this if you get multiple matches for the same person.')
+@click.option('--show-distance', default=False, type=bool, help='Output face distance. Useful for tweaking tolerance setting.')
+def main(known_people_folder, image_to_check, cpus, tolerance, show_distance):
+    known_names, known_face_encodings = scan_known_people(known_people_folder)
+
+    # Multi-core processing only supported on Python 3.4 or greater
+    if (sys.version_info < (3, 4)) and cpus != 1:
+        click.echo("WARNING: Multi-processing support requires Python 3.4 or greater. Falling back to single-threaded processing!")
+        cpus = 1
+
+    if os.path.isdir(image_to_check):
+        if cpus == 1:
+            [test_image(image_file, known_names, known_face_encodings, tolerance, show_distance) for image_file in image_files_in_folder(image_to_check)]
+        else:
+            process_images_in_process_pool(image_files_in_folder(image_to_check), known_names, known_face_encodings, cpus, tolerance, show_distance)
+    else:
+        test_image(image_to_check, known_names, known_face_encodings, tolerance, show_distance)
+
+
+if __name__ == "__main__":
+    main()

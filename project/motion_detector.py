@@ -1,43 +1,91 @@
-#Project 13 - Burglar Detector With Photo Capture
-#latest code updates available at: https://github.com/RuiSantosdotme/RaspberryPiProject
-#project updates at: https://nostarch.com/RaspberryPiProject
+import RPi.GPIO as gpio
+import io
+import picamera
+import cv2
+import time
+import numpy
+import face_recog
+# import smtplib
+# from email.mime.multipart import MIMEMultipart
+# from email.MIMEText import MIMEText
+# from email.mime.MIMEBase import MIMEBase
+# from email import encoders
+# from email.mime.image import MIMEImage
+ 
+# fromaddr = "mahimasunnym@gmail.co"    # change the email address accordingly
+# toaddr = "mahimasunnym@gmail.com"
+ 
+# mail = MIMEMultipart()
+ 
+# mail['From'] = fromaddr
+# mail['To'] = toaddr
+# mail['Subject'] = "Attachment"
+# body = "Please find the attachment"
 
-#import the necessary packages
-from gpiozero import Button, MotionSensor
-from picamera import PiCamera
-from time import sleep
-from signal import pause
+led=17
+pir=18
+HIGH=1
+LOW=0
+gpio.setwarnings(False)
+gpio.setmode(gpio.BCM)
+gpio.setup(led, gpio.OUT)            # initialize GPIO Pin as outputs
+gpio.setup(pir, gpio.IN)            # initialize GPIO Pin as input
+data=""
 
-#create objects that refer to a button,
-#a motion sensor and the PiCamera
-button = Button(2)
-pir = MotionSensor(4)
-camera = PiCamera()
+# def sendMail(data):
+#     mail.attach(MIMEText(body, 'plain'))
+#     print(data)
+#     dat='%s.jpg'%data
+#     print(dat)
+#     attachment = open(dat, 'rb')
+#     image=MIMEImage(attachment.read())
+#     attachment.close()
+#     mail.attach(image)
+#     server = smtplib.SMTP('smtp.gmail.com', 587)
+#     server.starttls()
+#     server.login(fromaddr, "maredonrocks33")
+#     text = mail.as_string()
+#     server.sendmail(fromaddr, toaddr, text)
+#     server.quit()
 
-#start the camera
-camera.rotation = 180
-camera.start_preview()
+def capture_image():
+    data= time.strftime("%d_%b_%Y|%H:%M:%S")
+    # camera.start_preview()
+    # time.sleep(5)
+    print(data)
+    #Create a memory stream so photos doesn't need to be saved in a file
+    stream = io.BytesIO()
 
-#image image names
-i = 0
+    with picamera.PiCamera() as camera:
+        camera.resolution = (320, 240)
+        camera.capture(stream, format='jpeg')
 
-#stop the camera when the pushbutton is pressed
-def stop_camera():
-    camera.stop_preview()
-    #exit the program
-    exit()
+    #Convert the picture into a numpy array
+    buff = numpy.fromstring(stream.getvalue(), dtype=numpy.uint8)
 
-#take photo when motion is detected
-def take_photo():
-    global i
-    i = i + 1
-    camera.capture('/home/pi/Desktop/image_%s.jpg' % i)
-    print('A photo has been taken')
-    sleep(10)
+    #Now creates an OpenCV image
+    image = cv2.imdecode(buff, 1)
+    # camera.stop_preview()
+    # time.sleep(1)
+    if not face_recog.check_known_face():
+        cv2.imwrite('./output/motion_detected.jpg',image)
+        cv2.waitKey(0)
 
-#assign a function that runs when the button is pressed
-button.when_pressed = stop_camera
-#assign a function that runs when motion is detected
-pir.when_motion = take_photo
+gpio.output(led , 0)
+# camera = picamera.PiCamera()
+# camera.rotation=180
+# camera.awb_mode= 'auto'
+# camera.brightness=55
+i=0
+while 1:
+    if gpio.input(pir)==1:
+        gpio.output(led, HIGH)
+        capture_image()
+        while(gpio.input(pir)==1):
+            time.sleep(1)
+        
+    else:
+        gpio.output(led, LOW)
+        time.sleep(0.01)
+    # i+=1 
 
-pause()

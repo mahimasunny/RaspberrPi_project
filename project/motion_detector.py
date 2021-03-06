@@ -4,7 +4,10 @@ import picamera
 import cv2
 import time
 import numpy
-import face_recog
+import face_recognition_impl
+from IPython.display import display
+from PIL import Image, ImageDraw
+
 # import smtplib
 # from email.mime.multipart import MIMEMultipart
 # from email.MIMEText import MIMEText
@@ -52,7 +55,6 @@ def capture_image():
     data= time.strftime("%d_%b_%Y|%H:%M:%S")
     # camera.start_preview()
     # time.sleep(5)
-    print(data)
     #Create a memory stream so photos doesn't need to be saved in a file
     stream = io.BytesIO()
 
@@ -62,20 +64,14 @@ def capture_image():
 
     #Convert the picture into a numpy array
     buff = numpy.fromstring(stream.getvalue(), dtype=numpy.uint8)
-
     #Now creates an OpenCV image
     image = cv2.imdecode(buff, 1)
-    # camera.stop_preview()
-    # time.sleep(1)
-    if not face_recog.check_known_face():
-        cv2.imwrite('./output/motion_detected.jpg',image)
-        cv2.waitKey(0)
+    pil_image = Image.fromarray(image)
+    pil_image.save("./output/motion_detected.jpg") 
+    if not face_recognition_impl.check_if_known_face('./output/motion_detected.jpg'):
+        print("Intruder detected")
 
 gpio.output(led , 0)
-# camera = picamera.PiCamera()
-# camera.rotation=180
-# camera.awb_mode= 'auto'
-# camera.brightness=55
 i=0
 while 1:
     if gpio.input(pir)==1:

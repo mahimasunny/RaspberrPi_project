@@ -46,6 +46,7 @@ def check_if_known_face(file_path):
     if name == "Unknown":
         print('Match not found')
         return False
+    print('Match found')
     return True
 
 def main():

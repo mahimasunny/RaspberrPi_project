@@ -55,19 +55,13 @@ def capture_image():
     data= time.strftime("%d_%b_%Y|%H:%M:%S")
     # camera.start_preview()
     # time.sleep(5)
-    #Create a memory stream so photos doesn't need to be saved in a file
-    stream = io.BytesIO()
-
-    with picamera.PiCamera() as camera:
-        camera.resolution = (320, 240)
-        camera.capture(stream, format='jpeg')
-
-    #Convert the picture into a numpy array
-    buff = numpy.fromstring(stream.getvalue(), dtype=numpy.uint8)
-    #Now creates an OpenCV image
-    image = cv2.imdecode(buff, 1)
-    pil_image = Image.fromarray(image)
-    pil_image.save("./output/motion_detected.jpg") 
+    print('Camera taking picture')
+    camera = picamera.PiCamera()
+    camera.start_preview()
+    time.sleep(5)
+    camera.capture('./output/motion_detected.jpg')
+    camera.stop_preview()
+    print('Picture saved')
     if not face_recognition_impl.check_if_known_face('./output/motion_detected.jpg'):
         print("Intruder detected")
 
@@ -76,6 +70,7 @@ i=0
 while 1:
     if gpio.input(pir)==1:
         gpio.output(led, HIGH)
+        print('Motion detected')
         capture_image()
         while(gpio.input(pir)==1):
             time.sleep(1)

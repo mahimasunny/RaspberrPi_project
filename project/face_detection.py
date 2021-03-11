@@ -1,13 +1,14 @@
+# This file contains the code to implement face detection
+
 import io
 import picamera
 import cv2
 import numpy
 
-#Create a memory stream so photos doesn't need to be saved in a file
+#Creating a memory stream 
 stream = io.BytesIO()
 
-#Get the picture (low resolution, so it should be quite fast)
-#Here you can also specify other parameters (e.g.:rotate the image)
+#Get the picture 
 with picamera.PiCamera() as camera:
     camera.resolution = (320, 240)
     camera.capture(stream, format='jpeg')
@@ -15,7 +16,7 @@ with picamera.PiCamera() as camera:
 #Convert the picture into a numpy array
 buff = numpy.fromstring(stream.getvalue(), dtype=numpy.uint8)
 
-#Now creates an OpenCV image
+#Creates an OpenCV image
 image = cv2.imdecode(buff, 1)
 
 #Load a cascade file for detecting faces
